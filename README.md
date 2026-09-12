@@ -1,50 +1,70 @@
-# HAST — web
+# HAST — hast.uz
 
-Two front ends, one repository, deployed separately on Vercel.
+The public page for HAST: a two-sided rental marketplace in Termiz, Uzbekistan.
+Tenants and owners talk to each other directly, without a broker and without a
+commission; people who want to split a rent find a flatmate on the same app.
 
-| Folder  | Domain           | What it is                                   |
-| ------- | ---------------- | -------------------------------------------- |
-| `site/` | `hast.uz`        | The public site: what HAST is, and the app.   |
-| `admin/`| `admin.hast.uz`  | The administration panel.                      |
-
-The API is **not** here. It is PHP and MySQL, and it stays where the database
-is — on the existing host, reached at `api.hast.uz`. Vercel runs static files
-and serverless JavaScript; it cannot run this API, and moving the API away from
-its database would cost every query a round trip across the internet.
-
-So the shape is:
-
-```
-hast.uz          → Vercel  (this repo, site/)
-admin.hast.uz    → Vercel  (this repo, admin/)
-api.hast.uz      → the existing host, unchanged
-```
+React 19 · TypeScript (strict) · Vite · Tailwind.
 
 ## Running it
 
 ```
-cd admin && npm install && npm run dev
-cd site  && npm install && npm run dev
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # -> dist/
 ```
 
-Both read the API base URL from `VITE_API_BASE`, falling back to the production
-API so a fresh clone works with no setup.
+## What is on the page
 
-## Deploying
+The product is an app, so the page shows the app. Three handsets carry it — the
+feed, a conversation with an owner, and what a listing earns the person who
+posted it — and the middle of the page pins one handset in place while the story
+scrolls past, changing screen as each chapter arrives.
 
-Each folder is its own Vercel project:
+The screens are **drawn in the browser**, not pasted in as screenshots. They are
+sharp at any size, weigh a few kilobytes, cannot go stale behind a label change,
+and take the app's own palette from `lib/core/theme/hast_colors.dart` so the
+page and the product match. The room pictures inside them are illustrations on
+purpose: a stock photograph of a flat that is not on HAST would be the first
+untrue thing on the page.
 
-1. Import this repository twice.
-2. Set **Root Directory** to `site` for one and `admin` for the other.
-3. Add the domain to each project and copy the DNS values Vercel shows — the
-   CNAME target is per-project now, so it cannot be written down here.
+When real screenshots exist, pass one to `<Phone shot="…">` and it replaces the
+drawn screen inside the same frame. Nothing around it has to change.
 
-Vercel issues and renews the certificates; there is nothing to do about SSL.
+### What the page will not say
 
-## Why two projects rather than one
+There are no invented user counts and no fake reviews. The four figures under
+the hero — no commission, two free listings, free messaging, Termiz — are each
+true today, and the page says at the top that Termiz is the only city with
+listings. Somebody who installs the app expecting Tashkent and finds nothing is
+a person lost for good.
 
-The panel and the public site have nothing in common: different audiences,
-different release cadence, and different consequences when something breaks. A
-mistake in a marketing page should not be able to take down the tool used to
-approve payments, and the panel carries `X-Frame-Options: DENY` and
-`noindex` headers the public site must not have.
+## Motion
+
+Every moving thing checks `prefers-reduced-motion` and stops if the visitor has
+asked it to. The parallax writes to `style.transform` inside a rAF rather than
+through React state, because re-rendering a tree of SVG handsets sixty times a
+second to move one box is how a smooth page becomes a stuttering one.
+
+The showcase pins its handset with `position: sticky`, which is released the
+moment the sticky element's parent ends. The text column therefore carries a
+deliberate tail of empty space (`lg:pb-[34vh]`); without it the phone slides
+away exactly while somebody is reading about the screen it is meant to be
+showing.
+
+## Where it points
+
+The API is a separate PHP application on its own host and is not part of this
+repository. Nothing on this page needs it — every link here is static.
+
+## Deployment
+
+One Vercel project, this repository, no Root Directory to set: the application
+is at the repository root. `vercel.json` carries the SPA rewrite, the caching
+rules and the security headers.
+
+## The administration panel
+
+Separate repository, separate Vercel project: `rootzero-x/hast-admin` serves
+`admin.hast.uz`. The two share a brand and nothing else — deliberately. That one
+is a dense, flat, dark tool; this is a light product page.

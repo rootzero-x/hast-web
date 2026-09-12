@@ -40,7 +40,9 @@ export function Phone({
           {shot ? (
             <img src={shot} alt={label} className="block h-[600px] w-full object-cover" />
           ) : (
-            <div className="h-[600px] w-full" role="img" aria-label={label}>
+            // Positioned, so a caller can stack several screens inside one
+            // handset and cross-fade between them.
+            <div className="relative h-[600px] w-full" role="img" aria-label={label}>
               {children}
             </div>
           )}
@@ -95,17 +97,113 @@ function Battery() {
   );
 }
 
-/** A stand-in for a photograph of a flat. Never pretends to be one. */
-function Shot({ from, to }: { from: string; to: string }) {
+/**
+ * A drawn room, standing in for the photograph a real listing would carry.
+ *
+ * An illustration rather than a stock photograph, and deliberately so: a
+ * photograph of a flat that is not on HAST would be the first untrue thing on
+ * the page, and the same picture appears on ten thousand other sites. This is
+ * unmistakably a drawing, so nobody can mistake it for a property on offer,
+ * while still reading as a room at a glance - light from a window, a floor, and
+ * something to sit or sleep on.
+ */
+type Room = 'living' | 'bedroom' | 'studio';
+
+const ROOMS: Record<Room, { wall: [string, string]; floor: string; piece: string; accent: string }> = {
+  living: { wall: ['#F0E6D8', '#DCCAB2'], floor: '#B98E63', piece: '#6E9C88', accent: '#3F6B5A' },
+  bedroom: { wall: ['#E4EDF3', '#C6D7E2'], floor: '#AE8A67', piece: '#F2F6F8', accent: '#9FB6C4' },
+  studio: { wall: ['#ECE8E0', '#D2CCC1'], floor: '#BE9A72', piece: '#C9714F', accent: '#8C4A32' },
+};
+
+function Shot({ room }: { room: Room }) {
+  const skin = ROOMS[room];
+  const id = 'room-' + room;
+
   return (
-    <div
-      className="absolute inset-0"
-      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+    <svg
+      viewBox="0 0 160 92"
+      preserveAspectRatio="xMidYMid slice"
+      className="absolute inset-0 h-full w-full"
+      aria-hidden
     >
-      {/* The suggestion of a room: a horizon and a window, no more. */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-black/10" />
-      <div className="absolute right-4 top-4 h-8 w-10 rounded-[3px] bg-white/25" />
-    </div>
+      <defs>
+        <linearGradient id={id + '-wall'} x1="0" y1="0" x2="0.4" y2="1">
+          <stop offset="0" stopColor={skin.wall[0]} />
+          <stop offset="1" stopColor={skin.wall[1]} />
+        </linearGradient>
+        <linearGradient id={id + '-glass'} x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#CFE6F2" stopOpacity="0.75" />
+        </linearGradient>
+        <linearGradient id={id + '-pool'} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.34" />
+          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      <rect width="160" height="92" fill={`url(#${id}-wall)`} />
+
+      {/* The window, and the wedge of daylight it throws across the floor. */}
+      <g>
+        <rect x="99" y="10" width="46" height="40" rx="3" fill={`url(#${id}-glass)`} />
+        <path d="M122 10v40M99 30h46" stroke={skin.wall[1]} strokeWidth="1.6" opacity="0.75" />
+        <rect
+          x="99"
+          y="10"
+          width="46"
+          height="40"
+          rx="3"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="2"
+          opacity="0.6"
+        />
+      </g>
+
+      <path d="M99 50 145 50 160 92 74 92Z" fill={`url(#${id}-pool)`} />
+
+      {/* Floor */}
+      <path d="M0 64h160v28H0Z" fill={skin.floor} />
+      <path d="M0 64h160v2.5H0Z" fill="#000000" opacity="0.10" />
+
+      {room === 'bedroom' ? (
+        <g>
+          {/* A bed, seen from the foot: headboard, mattress, two pillows. */}
+          <rect x="16" y="34" width="60" height="16" rx="3" fill={skin.accent} />
+          <rect x="10" y="48" width="72" height="24" rx="4" fill={skin.piece} />
+          <rect x="17" y="52" width="26" height="10" rx="3" fill="#FFFFFF" opacity="0.9" />
+          <rect x="48" y="52" width="26" height="10" rx="3" fill="#FFFFFF" opacity="0.9" />
+          <rect x="10" y="64" width="72" height="8" rx="3" fill={skin.accent} opacity="0.55" />
+        </g>
+      ) : room === 'studio' ? (
+        <g>
+          {/* A desk and chair: the room a student is actually looking for. */}
+          <rect x="12" y="52" width="58" height="4" rx="2" fill={skin.piece} />
+          <rect x="16" y="56" width="3.5" height="16" rx="1.6" fill={skin.accent} />
+          <rect x="62" y="56" width="3.5" height="16" rx="1.6" fill={skin.accent} />
+          <rect x="30" y="40" width="24" height="12" rx="1.6" fill={skin.accent} opacity="0.8" />
+          <circle cx="80" cy="60" r="8" fill={skin.piece} opacity="0.9" />
+          <rect x="78.5" y="60" width="3" height="12" rx="1.4" fill={skin.accent} />
+        </g>
+      ) : (
+        <g>
+          {/* A sofa, two cushions, a lamp. */}
+          <rect x="12" y="42" width="62" height="18" rx="5" fill={skin.accent} />
+          <rect x="8" y="52" width="70" height="20" rx="5" fill={skin.piece} />
+          <rect x="16" y="45" width="22" height="12" rx="3" fill="#FFFFFF" opacity="0.28" />
+          <rect x="44" y="45" width="22" height="12" rx="3" fill="#FFFFFF" opacity="0.28" />
+          <rect x="86" y="58" width="2.5" height="14" rx="1.2" fill={skin.accent} opacity="0.7" />
+          <path d="M81 58h13l-3-9h-7Z" fill="#FFFFFF" opacity="0.55" />
+        </g>
+      )}
+
+      {/* A plant, because every listing photograph has one. */}
+      <g opacity="0.92">
+        <path d="M148 72h9l-1.4 12h-6.2Z" fill={skin.floor} />
+        <path d="M152.5 72c-5-2-6-7-5-11 3 1 5.5 4.5 5 11Z" fill="#5C8C6E" />
+        <path d="M152.5 72c4-2.5 4.6-7.5 3.4-11.4-2.7 1.4-4.6 5-3.4 11.4Z" fill="#74A684" />
+      </g>
+    </svg>
   );
 }
 
@@ -151,23 +249,20 @@ export function FeedScreen() {
           price="2 500 000"
           title="2 xonali, tamirlangan"
           where="Termiz · Sh. Rashidov ko‘chasi"
-          from="#7DE2AD"
-          to="#12A25F"
+          room="living"
           boosted
         />
         <Card
           price="1 800 000"
           title="1 xonali, universitetga yaqin"
           where="Termiz · Al-Hakim"
-          from="#9BD8E6"
-          to="#17B8C4"
+          room="bedroom"
         />
         <Card
           price="950 000"
           title="Sherik kerak — talaba"
           where="Termiz · Markaz"
-          from="#F4D9A0"
-          to="#E8B44A"
+          room="studio"
         />
       </div>
 
@@ -180,21 +275,19 @@ function Card({
   price,
   title,
   where,
-  from,
-  to,
+  room,
   boosted = false,
 }: {
   price: string;
   title: string;
   where: string;
-  from: string;
-  to: string;
+  room: Room;
   boosted?: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-line">
       <div className="relative h-[92px]">
-        <Shot from={from} to={to} />
+        <Shot room={room} />
 
         {boosted && (
           <span className="absolute left-2.5 top-2.5 rounded-full bg-gold px-2 py-0.5 text-[9.5px] font-extrabold text-ink">

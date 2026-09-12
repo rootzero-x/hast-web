@@ -1,147 +1,109 @@
 # Putting HAST on hast.uz
 
-The code is finished and both projects build. What is left is wiring, and all of
-it needs an account only you have: GitHub, Vercel, and the uzinfocom DNS panel.
+Two repositories, two Vercel projects, one domain. The code is finished and both
+build; what follows needs a Vercel login, which is yours and should stay that
+way.
 
 ## The shape
 
 ```
-hast.uz          →  Vercel   (this repo, site/)
-www.hast.uz      →  Vercel   (redirects to hast.uz)
-admin.hast.uz    →  Vercel   (this repo, admin/)
-api.hast.uz      →  myxvest  (176.9.111.172) — the PHP API, unchanged
+hast.uz          →  Vercel   rootzero-x/hast-web     (this repository)
+www.hast.uz      →  Vercel   the same project, redirecting to the apex
+admin.hast.uz    →  Vercel   rootzero-x/hast-admin   (separate repository)
+api.hast.uz      →  myxvest  176.9.111.172 — the PHP API, unchanged
 ```
 
 **The API does not move.** Vercel runs static files and serverless JavaScript;
 the API is PHP talking to a MySQL database on the same machine. Moving it would
 mean rewriting it and then putting the internet between every query and its
-data. Pointing a subdomain at the existing host gives you the tidy address
-without any of that.
+data. A subdomain pointed at the existing host gives the tidy address without
+any of that.
 
-## What already exists
+Neither project needs a **Root Directory**: each repository has its application
+at the root.
 
-A Vercel project named **`hast-site`** was created and a production deployment
-pushed to it, under the account `oyatullo2s-projects`.
+## 1 · Clear out what is there now
 
-Two caveats, both of which you resolve in step 2:
+Vercel currently holds a `hast-site` project that was pushed from files rather
+than linked to a repository, with all three hostnames attached to it — including
+`admin.hast.uz`, which would serve the public page.
 
-- The team has **Vercel Authentication** switched on, so every URL currently
-  answers `302` to a login page. A public marketing site cannot stay that way.
-- That deployment was pushed from files, not from git. It is not linked to a
-  repository, so it will not rebuild when you push.
+Delete it: **Settings → Advanced → Delete Project**. The domains are released
+back to the account and can be attached to the right project in step 3. Deleting
+a project does not touch the domain itself or its DNS records.
 
-Nothing was created for `admin/` — deliberately, so that project name is still
-free for a clean git-linked import.
+## 2 · Import both repositories
 
-## 1 · GitHub
+Vercel → **Add New → Project**, twice:
 
-The repository is committed locally but has nowhere to go yet.
-
-1. Create an **empty** repository at <https://github.com/new> — no README, no
-   licence, no `.gitignore`. Call it `hast-web`.
-2. Then, from `Desktop/hast-web`:
-
-```
-git remote add origin https://github.com/rootzero-x/hast-web.git
-git branch -M main
-git push -u origin main
-```
-
-Your GitHub credentials are already in Windows Credential Manager, so the push
-should not ask for anything.
-
-## 2 · Vercel
-
-### 2a · Turn off Vercel Authentication
-
-**Settings → Deployment Protection → Vercel Authentication → Disabled**, for
-both projects. Until this is off, every visitor sees a Vercel login screen
-instead of the site.
-
-The admin panel does not need it either: it has its own two-factor sign-in, and
-leaving Vercel's gate on would lock out every appointed admin who has no Vercel
-account.
-
-### 2b · Link the repository
-
-For **`hast-site`**: Settings → Git → connect it to `rootzero-x/hast-web`, and
-set **Root Directory** to `site`. That replaces the file-pushed deployment with
-one that rebuilds on every push.
-
-For the panel, import the same repository as a **new** project:
-
-| | `hast-site` (exists) | `hast-admin` (create) |
+| | Project 1 | Project 2 |
 | --- | --- | --- |
-| **Root Directory** | `site` | `admin` |
-| Framework | Vite | Vite |
-| Domain | `hast.uz`, `www.hast.uz` | `admin.hast.uz` |
+| Repository | `rootzero-x/hast-web` | `rootzero-x/hast-admin` |
+| Suggested name | `hast-web` | `hast-admin` |
+| Root Directory | *(leave empty)* | *(leave empty)* |
+| Framework | Vite (detected) | Vite (detected) |
 
 Both build with `npm run build` into `dist/`, which Vercel detects on its own.
 
-### 2c · Environment variables
+### Environment variables
 
-Set on **both** projects, for Production and Preview:
+Only the panel needs any, and it has a working default compiled in, so a missing
+variable will not break the build:
 
 ```
-VITE_API_BASE = https://api.hast.uz/api/v1
+hast-admin →  VITE_API_BASE = https://api.hast.uz/api/v1
 ```
 
-Both have a working default compiled in, so a missing variable will not break
-the build — it just points at the production API, which is usually what you
-wanted anyway.
+## 3 · Attach the domains
 
-## 3 · DNS at uzinfocom
+| Project | Domains |
+| --- | --- |
+| `hast-web` | `hast.uz` and `www.hast.uz` |
+| `hast-admin` | `admin.hast.uz` |
 
-Add these to the `hast.uz` zone.
+Add them under each project's **Settings → Domains**. DNS is already pointed, so
+they should verify within a few minutes; Vercel issues and renews the
+certificates with nothing further from you.
 
-| Type | Name | Value | Why |
-| --- | --- | --- | --- |
-| A | `@` | `76.76.21.21` | Vercel's apex address |
-| CNAME | `www` | *(from Vercel)* | see below |
-| CNAME | `admin` | *(from Vercel)* | see below |
-| A | `api` | `176.9.111.172` | the existing host |
+Set `www.hast.uz` to redirect to `hast.uz` when Vercel offers — one address is
+one address, and two of them splits search ranking for no benefit.
 
-**The CNAME values cannot be written down here.** Vercel now issues a different
-one per project — something like `d1d4fc829fe7bc7c.vercel-dns-017.com`. Add the
-domain under the project's **Settings → Domains** first, and Vercel shows you
-the exact value to paste.
+## 4 · Deployment protection
 
-If uzinfocom's panel will not accept a CNAME at `www`, use Vercel's nameservers
-instead — but copy every existing record first, including MX, or e-mail stops
-arriving the moment the nameservers change.
+New projects inherit the account default, and this account has **Vercel
+Authentication** switched on — which answers every visitor with a Vercel login
+page. Turn it off for both: **Settings → Deployment Protection → Vercel
+Authentication → Disabled**.
 
-SSL needs nothing from you. Vercel issues and renews the certificates once the
-records resolve, usually within minutes.
+The panel does not need it either. It has its own two-factor sign-in, and
+leaving Vercel's gate on would lock out every appointed administrator who has no
+Vercel account.
 
-## 4 · api.hast.uz on the existing host
+## 5 · api.hast.uz on the existing host
 
-The DNS record alone is not enough: the host serves by hostname, so it has to be
-told the name belongs to this account.
+Already added in the myxvest panel, serving from `/www/api.hast.uz`. Confirm
+`https://api.hast.uz/api/v1/health` answers before pointing anything at it.
 
-In the myxvest control panel, add `api.hast.uz` as a domain or alias pointing at
-the directory the application already uses, then confirm
-`https://api.hast.uz/api/v1/health` answers.
-
-Until that is done, leave `VITE_API_BASE` pointing at the current address —
-everything keeps working, just with a longer URL.
-
-## 5 · After DNS resolves
-
-Three things on the API side, in this order:
+Then, on the API side and in this order:
 
 1. **`server/app/config.php`** — set `app.url` to `https://api.hast.uz`. This is
    what builds the absolute URLs for uploaded photographs, so changing it before
-   the domain works would break every image in the app.
+   the domain answers would break every image in the app.
 2. **The Telegram webhook** — `python tools/setup_bot.py` after step 1, so
    Telegram is told the new address. Miss this and the bot goes quiet.
 3. **Google sign-in** — add `https://admin.hast.uz` to the authorised JavaScript
    origins in the Google Cloud console.
 
-The CORS allow-list in `config.php` already names all three new origins.
+The CORS allow-list in `config.php` already names all three origins.
 
-## Why these steps are not automated
+## After this
 
-Creating repositories, configuring Vercel projects and editing DNS need
-credentials that belong to you. The Vercel connector available here can create a
-deployment but cannot read or configure a project, which is why step 2 is done
-by hand rather than for you.
+Both projects are linked to their repository, so every push to `main` deploys
+itself. None of these steps has to be repeated.
+
+## Why this is not automated
+
+The Vercel connector available in this workspace can create a deployment and
+nothing else: every attempt to read or configure a project under this account
+answers 403. Creating projects, deleting them, attaching domains and changing
+protection are all dashboard work.
