@@ -7,9 +7,10 @@
  * whether to install from what the thing looks like, and hiding that behind
  * adjectives only delays the decision.
  *
- * The middle of the page is one handset that stays put while the story scrolls
- * past it, changing screen as each chapter arrives. It is the cheapest honest
- * way to show three parts of an app in sequence: the reader never loses the
+ * The middle of the page is one handset that travels with the reader: it starts
+ * on the right beside the first chapter, slides across to the left as they
+ * scroll, and changes screen as each chapter arrives. It is the cheapest honest
+ * way to show three parts of an app in sequence - the reader never loses the
  * device, and nothing has to be claimed in words that the screen can show.
  *
  * Two claims here are deliberately modest. Termiz is the only city with
@@ -18,15 +19,15 @@
  * installs it and finds an empty city is a person lost for good.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { Mark } from './Mark';
 import { ChatScreen, FeedScreen, OwnerScreen, Phone } from './Phone';
 
-const APP_LINK = 'https://694fc8f1e1918.myxvest1.ru/rental-app/open/';
+const APP_LINK = '/ilova';
 const BOT_LINK = 'https://t.me/HAST_Mobile_bot';
-const PRIVACY = 'https://694fc8f1e1918.myxvest1.ru/rental-app/legal/?doc=privacy';
-const TERMS = 'https://694fc8f1e1918.myxvest1.ru/rental-app/legal/?doc=terms';
+const PRIVACY = '/maxfiylik';
+const TERMS = '/shartlar';
 
 export function App() {
   return (
@@ -265,10 +266,89 @@ const CHAPTERS: { n: string; title: string; body: string; screen: ReactNode; lab
   },
 ];
 
+/**
+ * Travels the handset across the page as the section is scrolled.
+ *
+ * The phone starts on the right, beside the first chapter, and slides to the
+ * left as the reader moves down - so it walks with the page rather than sitting
+ * in a slot while its contents change behind glass.
+ *
+ * The move finishes at the halfway mark and then holds. Spreading it over the
+ * whole section would leave the handset drifting under the last two chapters,
+ * which is distracting to read beside; finishing early means it is settled and
+ * still by the time anybody is reading next to it.
+ *
+ * The text avoids it rather than the other way round: the first chapter sits on
+ * the left while the phone is on the right, and the rest sit on the right once
+ * it has arrived. Nothing ever has to be moved out of the phone's way at
+ * runtime, so there is no layout to get wrong.
+ *
+ * Written straight to `style.transform` inside a rAF. This runs on every scroll
+ * frame, and re-rendering a tree of SVG handsets sixty times a second to move
+ * one box is how a smooth page becomes a stuttering one.
+ */
+function useTravel(section: RefObject<HTMLElement | null>) {
+  const rail = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+
+  useEffect(() => {
+    const node = rail.current;
+    const host = section.current;
+    if (!node || !host) return;
+
+    if (reduced) {
+      node.style.transform = '';
+      return;
+    }
+
+    let frame = 0;
+
+    const apply = () => {
+      frame = 0;
+
+      const box = host.getBoundingClientRect();
+      const scrollable = box.height - window.innerHeight;
+
+      // How far through the section the reader is, 0 to 1.
+      const progress = scrollable <= 0 ? 0 : clamp(-box.top / scrollable, 0, 1);
+
+      // Doubled so the journey is over by the midpoint, then eased so it does
+      // not start or stop abruptly.
+      const t = clamp(progress * 2, 0, 1);
+      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+
+      const span = Math.max(0, node.parentElement!.clientWidth - node.offsetWidth);
+
+      node.style.transform = 'translate3d(' + ((1 - eased) * span).toFixed(1) + 'px,0,0)';
+    };
+
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(apply);
+    };
+
+    apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (frame !== 0) cancelAnimationFrame(frame);
+      node.style.transform = '';
+    };
+  }, [reduced, section]);
+
+  return rail;
+}
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
 function Showcase() {
   const [active, setActive] = useState(0);
+  const section = useRef<HTMLElement>(null);
   const chapters = useRef<(HTMLElement | null)[]>([]);
   const reduced = usePrefersReducedMotion();
+  const rail = useTravel(section);
 
   // The chapter holding the middle of the screen is the one on the handset. A
   // band rather than a line, so a slow scroll cannot flicker between two.
@@ -293,36 +373,57 @@ function Showcase() {
   }, []);
 
   return (
-    <section className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
-      <Heading eyebrow="Qanday ishlaydi" title="Uch qadam, o‘rtada hech kimsiz." />
+    <section ref={section} className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
+      <Heading eyebrow="Qanday ishlaydi" title="Uch qadam, oʻrtada hech kimsiz." />
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_auto] lg:gap-20">
+      <div className="relative mt-10">
         {/*
-          The tail is what keeps the handset pinned through the last chapter.
-
-          A sticky element is released once its parent's bottom edge reaches it,
-          so a column that ends level with the final paragraph lets the phone
-          slide away exactly while somebody is reading about the screen it is
-          supposed to be showing. The extra third of a viewport gives the sticky
-          column somewhere left to travel.
+          The travelling layer. Absolutely positioned so it takes no space in
+          the flow, with a sticky child that pins it to the middle of the
+          screen for as long as the chapters beside it last.
         */}
-        <ol className="min-w-0 lg:pb-[34vh]">
+        <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden>
+          <div className="sticky top-0 flex h-dvh items-center">
+            <div ref={rail} className="will-change-transform">
+              <Phone label={CHAPTERS[active]?.label ?? 'HAST ilovasi'}>
+                {CHAPTERS.map((chapter, i) => (
+                  <div
+                    key={chapter.n}
+                    className={
+                      'absolute inset-0 transition-transform duration-[600ms] ease-[cubic-bezier(0.22,1,0.36,1)] ' +
+                      (i === active
+                        ? 'translate-x-0'
+                        : i < active
+                          ? '-translate-x-full'
+                          : 'translate-x-full')
+                    }
+                  >
+                    {chapter.screen}
+                  </div>
+                ))}
+              </Phone>
+            </div>
+          </div>
+        </div>
+
+        <ol className="relative">
           {CHAPTERS.map((chapter, i) => (
             <li
               key={chapter.n}
               ref={(node) => {
                 chapters.current[i] = node;
               }}
-              className="flex flex-col justify-center py-10 lg:min-h-[78vh] lg:py-0"
+              className={
+                'flex flex-col justify-center py-10 lg:min-h-dvh lg:py-0 ' +
+                // The first chapter keeps to the left while the handset is
+                // still on the right; the rest move over once it has arrived.
+                (i === 0 ? 'lg:items-start' : 'lg:items-end')
+              }
             >
               <div
                 className={
-                  'transition-opacity duration-500 ' +
-                  // Off-chapter text is dimmed on wide screens, where one
-                  // handset is showing something else and the eye needs telling
-                  // which paragraph it belongs to. On a narrow screen every
-                  // chapter carries its own handset, so nothing is dimmed.
-                  (reduced || i === active ? 'opacity-100' : 'lg:opacity-35')
+                  'transition-opacity duration-500 lg:max-w-[46%] ' +
+                  (reduced || i === active ? 'opacity-100' : 'lg:opacity-30')
                 }
               >
                 <span className="font-mono text-[13px] font-bold text-brand-600">{chapter.n}</span>
@@ -336,71 +437,16 @@ function Showcase() {
                 </p>
               </div>
 
-              {/* Narrow screens get the handset inline, under its own chapter.
-                  A sticky column needs a column beside it to stay still
-                  against, and on a phone there is not one. */}
+              {/* Narrow screens get the handset inline, under its own chapter:
+                  there is no second column for it to travel across. */}
               <div className="mt-8 flex justify-center lg:hidden">
                 <Phone label={chapter.label}>{chapter.screen}</Phone>
               </div>
             </li>
           ))}
         </ol>
-
-        <div className="hidden lg:block">
-          <div className="sticky top-0 flex h-dvh items-center">
-            <div className="flex items-center gap-6">
-              <Rail count={CHAPTERS.length} active={active} />
-
-              <Phone label={CHAPTERS[active]?.label ?? 'HAST ilovasi'}>
-                {/*
-                  The screens slide rather than cross-fade.
-
-                  Fading one opaque screen into another leaves both half
-                  transparent for the length of the transition, and the two
-                  interfaces blend into an unreadable smear. Sliding keeps every
-                  screen fully opaque, so what the eye sees at every frame is a
-                  real screen - and it is what the app itself does when you move
-                  between tabs.
-                */}
-                {CHAPTERS.map((chapter, i) => (
-                  <div
-                    key={chapter.n}
-                    aria-hidden={i !== active}
-                    className={
-                      'absolute inset-0 transition-transform duration-[600ms] ease-[cubic-bezier(0.22,1,0.36,1)] ' +
-                      (i === active
-                        ? 'translate-x-0'
-                        : i < active
-                          ? 'pointer-events-none -translate-x-full'
-                          : 'pointer-events-none translate-x-full')
-                    }
-                  >
-                    {chapter.screen}
-                  </div>
-                ))}
-              </Phone>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
-  );
-}
-
-/** Which chapter the handset is on, as marks down the page. */
-function Rail({ count, active }: { count: number; active: number }) {
-  return (
-    <div className="flex flex-col items-center gap-2" aria-hidden>
-      {Array.from({ length: count }, (_, i) => (
-        <span
-          key={i}
-          className={
-            'w-[3px] rounded-full transition-all duration-500 ' +
-            (i === active ? 'h-8 bg-brand-500' : 'h-3 bg-ink-faint/30')
-          }
-        />
-      ))}
-    </div>
   );
 }
 
