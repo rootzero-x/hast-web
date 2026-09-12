@@ -2,19 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Only what Tailwind cannot say in a class.
+ *
+ * The page is light on purpose and does not follow the system theme. A
+ * marketing page has one job and one look; a second palette doubles the
+ * surface area for something to go wrong on a phone nobody here owns, and
+ * buys nothing in return.
+ */
+
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-paper text-ink font-sans antialiased;
+    @apply bg-canvas font-sans text-ink antialiased;
   }
 
-  @media (prefers-color-scheme: dark) {
-    body {
-      @apply bg-[#0A1310] text-[#E7F0EB];
-    }
+  ::selection {
+    background: rgba(79, 214, 140, 0.3);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -29,5 +37,32 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+@layer components {
+  /*
+   * The hero's ground: a dark green field with coloured lights thrown across
+   * it. A flat two-stop gradient looks like a template; overlapping radial
+   * pools give the light somewhere to come from.
+   */
+  .aurora {
+    background-color: #07160f;
+    background-image:
+      radial-gradient(880px 560px at 10% -10%, rgba(79, 214, 140, 0.62), transparent 58%),
+      radial-gradient(760px 520px at 92% 0%, rgba(23, 184, 196, 0.52), transparent 60%),
+      radial-gradient(700px 620px at 55% 112%, rgba(34, 194, 116, 0.46), transparent 58%);
+  }
+
+  /* A hairline that fades out at both ends, for use on the dark sections. */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.16) 18%,
+      rgba(255, 255, 255, 0.16) 82%,
+      transparent
+    );
   }
 }
