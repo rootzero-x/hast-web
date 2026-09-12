@@ -7,11 +7,11 @@
  * whether to install from what the thing looks like, and hiding that behind
  * adjectives only delays the decision.
  *
- * The middle of the page is one handset that travels with the reader: it starts
- * on the right beside the first chapter, slides across to the left as they
- * scroll, and changes screen as each chapter arrives. It is the cheapest honest
- * way to show three parts of an app in sequence - the reader never loses the
- * device, and nothing has to be claimed in words that the screen can show.
+ * The middle of the page is one handset that travels with the reader: right for
+ * the first chapter, banking across to the left for the second, back to the
+ * right for the third, changing screen as each one arrives. It is the cheapest
+ * honest way to show three parts of an app in sequence - the reader never loses
+ * the device, and nothing has to be claimed in words that the screen can show.
  *
  * Two claims here are deliberately modest. Termiz is the only city with
  * listings, and the page says so at the top rather than implying national
@@ -267,25 +267,26 @@ const CHAPTERS: { n: string; title: string; body: string; screen: ReactNode; lab
 ];
 
 /**
- * Travels the handset across the page as the section is scrolled.
+ * Carries the handset across the page as the section is scrolled.
  *
- * The phone starts on the right, beside the first chapter, and slides to the
- * left as the reader moves down - so it walks with the page rather than sitting
- * in a slot while its contents change behind glass.
+ * It does not slide in a straight line. The horizontal position follows a
+ * cosine, so the phone leaves and arrives at rest and is quickest in the middle
+ * - the motion a thing with mass actually has. Chapter one has it on the right,
+ * chapter two on the left, chapter three back on the right, and because the
+ * chapter centres sit at one sixth, one half and five sixths of the scroll, one
+ * cosine passes through all three without a single hand-placed keyframe.
  *
- * The move finishes at the halfway mark and then holds. Spreading it over the
- * whole section would leave the handset drifting under the last two chapters,
- * which is distracting to read beside; finishing early means it is settled and
- * still by the time anybody is reading next to it.
+ * Three things ride on the same phase so the flight reads as one movement
+ * rather than four effects:
  *
- * The text avoids it rather than the other way round: the first chapter sits on
- * the left while the phone is on the right, and the rest sit on the right once
- * it has arrived. Nothing ever has to be moved out of the phone's way at
- * runtime, so there is no layout to get wrong.
+ *   bank    the handset turns to face where it is going, and is square to the
+ *           reader again wherever it comes to rest
+ *   arc     it lifts slightly at the midpoint, so the path is a curve
+ *   recede  it shrinks a little in flight, as something further away does
  *
- * Written straight to `style.transform` inside a rAF. This runs on every scroll
- * frame, and re-rendering a tree of SVG handsets sixty times a second to move
- * one box is how a smooth page becomes a stuttering one.
+ * Everything is written straight to `style.transform` inside a rAF. This runs
+ * on every scroll frame, and re-rendering a tree of SVG handsets sixty times a
+ * second to move one box is how a smooth page becomes a stuttering one.
  */
 function useTravel(section: RefObject<HTMLElement | null>) {
   const rail = useRef<HTMLDivElement>(null);
@@ -308,18 +309,26 @@ function useTravel(section: RefObject<HTMLElement | null>) {
 
       const box = host.getBoundingClientRect();
       const scrollable = box.height - window.innerHeight;
-
-      // How far through the section the reader is, 0 to 1.
       const progress = scrollable <= 0 ? 0 : clamp(-box.top / scrollable, 0, 1);
 
-      // Doubled so the journey is over by the midpoint, then eased so it does
-      // not start or stop abruptly.
-      const t = clamp(progress * 2, 0, 1);
-      const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      // Held before the first chapter is centred and after the last, so the
+      // phone is still while anybody is actually reading beside it.
+      const p = clamp(progress, FIRST_STOP, LAST_STOP);
+      const phase = ((p - FIRST_STOP) / (MIDDLE_STOP - FIRST_STOP)) * Math.PI;
+
+      // 0 at the right-hand stops, 1 at the left-hand one.
+      const across = (1 - Math.cos(phase)) / 2;
+      const swing = Math.sin(phase);
 
       const span = Math.max(0, node.parentElement!.clientWidth - node.offsetWidth);
 
-      node.style.transform = 'translate3d(' + ((1 - eased) * span).toFixed(1) + 'px,0,0)';
+      node.style.transform = [
+        'translate3d(' + ((1 - across) * span).toFixed(1) + 'px,',
+        (-Math.abs(swing) * 22).toFixed(1) + 'px,0)',
+        'rotateY(' + (swing * -16).toFixed(2) + 'deg)',
+        'rotate(' + (swing * -5).toFixed(2) + 'deg)',
+        'scale(' + (1 - Math.abs(swing) * 0.045).toFixed(4) + ')',
+      ].join(' ');
     };
 
     const onScroll = () => {
@@ -340,6 +349,12 @@ function useTravel(section: RefObject<HTMLElement | null>) {
 
   return rail;
 }
+
+// Where the three chapters are centred in the section's scroll, which is also
+// where the handset comes to rest.
+const FIRST_STOP = 1 / 6;
+const MIDDLE_STOP = 1 / 2;
+const LAST_STOP = 5 / 6;
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -383,7 +398,7 @@ function Showcase() {
           screen for as long as the chapters beside it last.
         */}
         <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden>
-          <div className="sticky top-0 flex h-dvh items-center">
+          <div className="sticky top-0 flex h-dvh items-center [perspective:1400px]">
             <div ref={rail} className="will-change-transform">
               <Phone label={CHAPTERS[active]?.label ?? 'HAST ilovasi'}>
                 {CHAPTERS.map((chapter, i) => (
@@ -406,7 +421,14 @@ function Showcase() {
           </div>
         </div>
 
-        <ol className="relative">
+        {/*
+          A tail, so the sticky layer still has travel left while the last
+          chapter is centred. A sticky element is released the moment its
+          parent's bottom edge reaches it, and with three full-height chapters
+          the release lands exactly on chapter three - the handset slides away
+          precisely while somebody is reading beside it.
+        */}
+        <ol className="relative lg:pb-[26vh]">
           {CHAPTERS.map((chapter, i) => (
             <li
               key={chapter.n}
@@ -415,9 +437,9 @@ function Showcase() {
               }}
               className={
                 'flex flex-col justify-center py-10 lg:min-h-dvh lg:py-0 ' +
-                // The first chapter keeps to the left while the handset is
-                // still on the right; the rest move over once it has arrived.
-                (i === 0 ? 'lg:items-start' : 'lg:items-end')
+                // The handset is on the right, then the left, then the
+                // right again - so the text takes the opposite side each time.
+                (i === 1 ? 'lg:items-end' : 'lg:items-start')
               }
             >
               <div
